@@ -1,0 +1,12 @@
+---
+# tasks file for os-upgrade
+- name: Run tasks for Debian family
+  include_tasks: debian.yml
+  when: ansible_os_family == "Debian"
+
+- name: Run tasks for RedHat family
+  include_tasks: redhat.yml
+  when: ansible_os_family == "RedHat"
+
+
+

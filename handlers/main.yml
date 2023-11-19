@@ -1,0 +1,4 @@
+---
+# handlers file for os-upgrade
+- name: Reboot the server
+  ansible.builtin.reboot:

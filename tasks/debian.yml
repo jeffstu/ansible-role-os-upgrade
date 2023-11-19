@@ -1,0 +1,61 @@
+---
+# tasks/debian.yml
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: "{{ update_cache_timeout }}"
+  register: apt_cache_updated
+
+- name: Log apt cache update
+  include_tasks: "{{ role_path }}/handlers/logging.yml"
+  vars:
+    update_logs: >
+      {% if apt_cache_updated.changed %}
+      Apt cache update output: Cache updated.
+      {% else %}
+      Apt cache update output: No changes.
+      {% endif %}
+  when: apt_cache_updated is changed
+
+- name: Ensure needrestart is installed
+  apt:
+    name: needrestart
+    state: present
+
+- name: Check if reboot is required using needrestart
+  command: needrestart -b
+  register: needrestart_output
+  changed_when: false
+  failed_when: false
+
+- name: Reboot the server if needrestart indicates a reboot is required
+  command: /sbin/reboot
+  when: needrestart_output.stdout | search("reboot is required")
+
+
+- block:
+    - name: Check for packages that need updating
+      shell: apt list --upgradable
+      register: apt_packages
+
+    - name: Log apt package check
+      include_tasks: "{{ role_path }}/handlers/logging.yml"
+      vars:
+        update_logs: >
+          {% if apt_packages.stdout %}
+          Apt package check output: {{ apt_packages.stdout }}
+          {% endif %}
+          {% if apt_packages.stderr %}
+          Apt package check errors: {{ apt_packages.stderr }}
+          {% endif %}
+      when: apt_packages is changed
+
+  rescue:
+    - name: Handle Error in package check
+      debug:
+        msg: "Failed to check for upgradable packages."
+
+- name: Display count of upgradable packages for Debian
+  debug:
+    msg: "Packages to be upgraded: {{ apt_packages.stdout_lines | length }}"
+  when: apt_packages.stdout_lines is defined and apt_packages.stdout_lines | length > 0

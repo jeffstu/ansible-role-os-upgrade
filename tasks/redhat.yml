@@ -1,0 +1,48 @@
+---
+- name: Update yum cache
+  yum:
+    update_cache: yes
+    update_cache_timeout: "{{ update_cache_timeout }}"
+  register: yum_cache_updated
+
+- name: Log yum cache update
+  include_tasks: "{{ role_path }}/handlers/logging.yml"
+  vars:
+    update_logs: >
+      {% if yum_cache_updated.stdout %}
+      Yum cache update output: {{ yum_cache_updated.stdout }}
+      {% endif %}
+      {% if yum_cache_updated.stderr %}
+      Yum cache update errors: {{ yum_cache_updated.stderr }}
+      {% endif %}
+  when: yum_cache_updated is changed
+
+- name: Check for packages that need updating
+  shell: yum list updates
+  register: yum_packages
+  failed_when: "'Error' in yum_packages.stderr"
+  when: yum_cache_updated is changed
+
+- name: Log yum package check
+  include_tasks: "{{ role_path }}/handlers/logging.yml"
+  vars:
+    update_logs: >
+      {% if yum_packages.stdout %}
+      Yum package check output: {{ yum_packages.stdout }}
+      {% endif %}
+      {% if yum_packages.stderr %}
+      Yum package check errors: {{ yum_packages.stderr }}
+      {% endif %}
+  when: yum_packages is changed
+
+- name: Display count of upgradable packages for RedHat
+  debug:
+    msg: "Packages to be upgraded: {{ yum_packages.stdout_lines | length }}"
+  when: yum_packages.stdout_lines is defined and yum_packages.stdout_lines | length > 0
+
+# In your task file, after an update or change that requires a reboot
+- name: Check if reboot is required
+  command: /usr/bin/needs-restarting -r
+  register: reboot_required
+  changed_when: reboot_required.rc == 1
+  notify: reboot
